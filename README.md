@@ -41,6 +41,14 @@ Google Sheets dibaca sebagai hasil angka/formula melalui `UNFORMATTED_VALUE`, ta
 
 Gunakan **Streamlit Community Cloud**, repository GitHub private, entry point `app.py`, Python 3.12, dan Secrets pada pengaturan hosting. Alamat tersedia sebagai `https://<subdomain>.streamlit.app`. Detail langkah, akses viewer, dan batas hibernasi dijelaskan di panduan. Hosting belum diterbitkan oleh perubahan kode ini.
 
+## Tampilan dashboard
+
+- Pilih **Light / Dark / System** melalui menu kanan atas. Tema utama, sidebar, dropdown, tabel, dan teks grafik mengikuti pilihan tersebut.
+- Empat KPI menggunakan tinggi yang sama, 136 px, dengan grid 4, 2, atau 1 kolom sesuai lebar area dashboard, termasuk ketika sidebar terbuka.
+- Judul dan status sinkronisasi diringkas. Interval dan informasi sumber tersedia di **Pembaruan & sumber** pada sidebar; waktu pembacaan lengkap tersedia di **Validasi dan kualitas data**.
+- Pembacaan Google Sheets berkala menggunakan cache yang diperbarui di latar belakang setelah data pertama dimuat. Sinkronisasi manual tetap membaca ulang langsung.
+- Sertakan `dashboard.css` dan `.streamlit/config.toml` ketika memperbarui kode hosting. File CSS hanya mengatur grid KPI; warna diatur oleh tema native Streamlit.
+
 ## Verifikasi
 
 ```powershell
@@ -53,12 +61,14 @@ Pengujian menggunakan data buatan dan mock API. Koneksi Google asli perlu diuji 
 
 ```text
 app.py                           # UI, cache, refresh, status sinkronisasi
+dashboard.css                    # grid KPI responsif, tanpa override warna
 data_loader.py                   # adapter Excel, parser bersama, agregasi
 google_sheets_loader.py           # adapter Sheets API, service account read-only
 requirements.txt
 JALANKAN_DASHBOARD.bat
 PANDUAN_GOOGLE_SHEETS_DEPLOY.md
 .streamlit/secrets.example.toml   # contoh konfigurasi
+.streamlit/config.toml            # tema terang/gelap dan sidebar
 .streamlit/secrets.toml           # lokal saja, tidak masuk Git
 tests/
 Excell/Sales.xls                  # sumber privat, tidak masuk Git

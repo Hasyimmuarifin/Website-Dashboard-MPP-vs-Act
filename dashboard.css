@@ -1,0 +1,29 @@
+/* Only the KPI layout needs CSS: native columns otherwise squeeze four cards
+   beside an open sidebar at tablet widths. All colors come from the theme. */
+.st-key-kpi_grid {
+    container-type: inline-size;
+    container-name: kpis;
+}
+
+.st-key-kpi_grid [data-testid="stHorizontalBlock"] {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.st-key-kpi_grid [data-testid="stColumn"] {
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+@container kpis (max-width: 48rem) {
+    .st-key-kpi_grid [data-testid="stHorizontalBlock"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@container kpis (max-width: 22rem) {
+    .st-key-kpi_grid [data-testid="stHorizontalBlock"] {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

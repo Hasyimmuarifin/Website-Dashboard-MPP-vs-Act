@@ -55,7 +55,7 @@ KPI, grafik, tabel, dan unduhan CSV mengikuti data
 - Interval tercepat sekaligus default **5 detik**, dapat diubah menjadi 10, 15, 30, atau 60 detik dari sidebar. Ini pembaruan mendekati real time melalui polling, bukan push langsung setiap ketikan.
 - Pembacaan API disimpan pada cache memori bersama selama 5 detik untuk mengurangi permintaan dari banyak pengunjung. Dalam kondisi normal dengan interval default, perubahan umumnya terlihat dalam sekitar **5–10 detik**, ditambah waktu koneksi/perhitungan Google. Angka ini bukan jaminan latensi.
 - Hanya satu rentang `'<nama tab>'!C:R` dibaca per pengambilan. Nilai formula dibaca sebagai hasil angka tanpa format tampilan agar locale Indonesia tidak mengubah interpretasi angka.
-- **Sinkronkan sekarang** melewati cache sumber saat ini dan segera meminta pembacaan baru. Hindari menekannya berulang kali bersamaan dari banyak browser.
+- **Sinkronkan** melewati cache sumber saat ini dan segera meminta pembacaan baru. Hindari menekannya berulang kali bersamaan dari banyak browser.
 - Waktu yang ditampilkan adalah **waktu pembacaan data oleh dashboard (WIB)**, bukan waktu edit terakhir Google Sheets. Waktu cache tetap ditampilkan apa adanya.
 - Jika gagal, dashboard menampilkan peringatan dan mempertahankan data sukses terakhir untuk sumber yang sama dalam sesi browser. Pembacaan dicoba lagi dengan jeda 10, 20, 40, hingga 60 detik, mengikuti interval pemeriksaan. Jika sesi baru belum pernah berhasil membaca, grafik belum ditampilkan.
 - Saat kembali ke sumber lain atau konfigurasi berubah, data lama tidak dipakai sebagai data sumber baru.
@@ -72,11 +72,13 @@ Pilihan yang sesuai untuk proyek ini adalah **Streamlit Community Cloud**: hosti
 
    ```text
    app.py
+   dashboard.css
    data_loader.py
    google_sheets_loader.py
    requirements.txt
    .gitignore
    .streamlit/
+     config.toml          # tema terang/gelap, disertakan di GitHub
      secrets.example.toml  # contoh kosong, bukan secrets.toml asli
    ```
 

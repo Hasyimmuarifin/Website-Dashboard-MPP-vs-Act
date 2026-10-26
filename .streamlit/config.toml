@@ -1,0 +1,58 @@
+# Native dual-mode theme: widgets, dropdown menus, tables and chart text inherit
+# the same palette. Keep color overrides out of app.py so dark mode stays usable.
+[theme]
+font = "sans-serif"
+baseFontSize = 15
+headingFontSizes = ["1.9rem", "1.5rem", "1.15rem", "1rem", "0.95rem", "0.875rem"]
+headingFontWeights = [700, 650, 600, 600, 600, 600]
+metricValueFontSize = "2.25rem"
+metricValueFontWeight = 650
+baseRadius = "0.75rem"
+buttonRadius = "0.5rem"
+showWidgetBorder = true
+showSidebarBorder = true
+paddingTop = "1rem"
+paddingBottom = "2rem"
+
+[theme.light]
+primaryColor = "#BE233D"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F6FA"
+textColor = "#192B43"
+borderColor = "#D8E1EC"
+linkColor = "#A51D36"
+greenColor = "#16815D"
+redColor = "#BE233D"
+dataframeHeaderBackgroundColor = "#EDF2F8"
+dataframeHeaderTextColor = "#253B56"
+chartCategoricalColors = ["#8291A8", "#D82743"]
+
+[theme.dark]
+primaryColor = "#E34C65"
+backgroundColor = "#0F1826"
+secondaryBackgroundColor = "#1A293E"
+textColor = "#EDF2FA"
+borderColor = "#34465F"
+linkColor = "#FF9DAE"
+greenColor = "#50C9A2"
+redColor = "#F7798F"
+dataframeHeaderBackgroundColor = "#23344C"
+dataframeHeaderTextColor = "#EDF2FA"
+chartCategoricalColors = ["#A3B2C9", "#F06680"]
+
+[theme.sidebar]
+paddingTop = "1rem"
+paddingBottom = "1.5rem"
+headingFontSizes = ["1.4rem", "1.2rem", "1.1rem", "1rem", "0.95rem", "0.875rem"]
+
+[theme.light.sidebar]
+backgroundColor = "#F4F7FB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#192B43"
+borderColor = "#CBD6E4"
+
+[theme.dark.sidebar]
+backgroundColor = "#121F32"
+secondaryBackgroundColor = "#20324B"
+textColor = "#F1F5FC"
+borderColor = "#405572"
