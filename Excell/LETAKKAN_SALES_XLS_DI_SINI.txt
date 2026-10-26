@@ -1,0 +1,3 @@
+Letakkan file Sales.xls di direktori ini.
+Nama file wajib Sales.xls (kecuali mengatur variabel SALES_EXCEL_PATH).
+File tidak disertakan di ZIP karena berisi data internal perusahaan.
