@@ -2,6 +2,12 @@
 __pycache__/
 *.pyc
 .streamlit/secrets.toml
+.streamlit/secrets.*.toml
+!.streamlit/secrets.example.toml
+credentials*.json
+service-account*.json
+gcp-service-account*.json
+*.pem
 Excell/*.xls
 Excell/*.xlsx
 *.log

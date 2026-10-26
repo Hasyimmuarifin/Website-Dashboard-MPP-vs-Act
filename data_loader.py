@@ -27,6 +27,18 @@ def load_sales(path: str | Path) -> tuple[pd.DataFrame, list[str]]:
     engine = 'xlrd' if path.suffix.lower() == '.xls' else 'openpyxl'
     raw = pd.read_excel(path, sheet_name=SHEET_NAME, header=None, engine=engine,
                         usecols='C:R', dtype=object)
+    return parse_sales(raw)
+
+
+def parse_sales(raw: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Normalize a C:R matrix from Excel or Sheets using the same business rules.
+
+    Sheets omits trailing empty cells/columns; pad them before positional reads.
+    """
+    raw = raw.reset_index(drop=True)
+    # read_excel(usecols='C:R') keeps original labels 2..17; API uses 0..15.
+    raw.columns = range(raw.shape[1])
+    raw = raw.reindex(columns=range(16))
     # C is first col of the selection; K/L/M=8/9/10, P/Q/R=13/14/15.
     result = pd.DataFrame({
         'Cabang': raw.iloc[:, 0].astype('string').str.strip().str.upper(),
@@ -38,6 +50,8 @@ def load_sales(path: str | Path) -> tuple[pd.DataFrame, list[str]]:
         'actual_mitra': raw.iloc[:, 15],
     })
     result = result[result['Cabang'].isin(AREA_FOR)].copy()
+    if result.empty:
+        raise ValueError('Tidak ada cabang yang dikenali. Periksa tab dan posisi nama cabang di kolom C.')
     if result['Cabang'].duplicated().any():
         duplicates = result.loc[result['Cabang'].duplicated(), 'Cabang'].tolist()
         raise ValueError(f'Cabang duplikat dalam sumber: {duplicates}')
@@ -46,6 +60,7 @@ def load_sales(path: str | Path) -> tuple[pd.DataFrame, list[str]]:
     if missing:
         warnings.append('Cabang belum ditemukan: ' + ', '.join(missing))
     for col in METRICS:
+        result[col] = result[col].map(lambda value: None if isinstance(value, str) and not value.strip() else value)
         values = pd.to_numeric(result[col], errors='coerce')
         bad = result[col].notna() & values.isna()
         if bad.any():
