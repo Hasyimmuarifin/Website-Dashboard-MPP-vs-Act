@@ -5,7 +5,11 @@ Dashboard Python + Streamlit + Plotly untuk memantau kebutuhan dan realisasi ten
 ## Sumber data
 
 - **Google Sheets:** kolaborasi pada spreadsheet privat; KPI, grafik, tabel, dan CSV mengikuti perubahan melalui Sheets API. Polling default 5 detik, cache bersama 5 detik, waktu sinkronisasi WIB, tombol sinkronisasi manual, dan data terakhir tetap terlihat saat koneksi gagal.
-- **Excel lokal:** membaca `Excell/Sales.xls` setelah disimpan; sumber tidak pernah diubah oleh dashboard. Letak alternatif dapat diatur melalui `SALES_EXCEL_PATH`.
+- **Excel lokal melalui browser:** pada satu website online, setiap pengguna memilih workbook miliknya sekali; perubahan file yang disimpan dipantau otomatis setiap 5 detik melalui Chrome/Edge desktop.
+- **Excel lokal melalui path:** saat server berjalan di laptop sendiri, tempel path dari Windows Explorer dan klik Hubungkan path. File tidak perlu dipindahkan ke folder proyek.
+- **Unggah Excel:** membaca snapshot workbook per sesi; unggah ulang setelah file asli berubah.
+
+Langkah lengkap dan batas akses file browser: **[PANDUAN_EXCEL_PER_PENGGUNA.md](PANDUAN_EXCEL_PER_PENGGUNA.md)**.
 
 Untuk menghubungkan Google Sheets dan menerbitkan dashboard gratis tanpa domain, ikuti **[PANDUAN_GOOGLE_SHEETS_DEPLOY.md](PANDUAN_GOOGLE_SHEETS_DEPLOY.md)**. Contoh konfigurasi tersedia di **[.streamlit/secrets.example.toml](.streamlit/secrets.example.toml)**.
 
@@ -43,8 +47,9 @@ Gunakan **Streamlit Community Cloud**, repository GitHub private, entry point `a
 
 ## Tampilan dashboard
 
-- Pilih **Light / Dark / System** melalui menu kanan atas. Tema utama, sidebar, dropdown, tabel, dan teks grafik mengikuti pilihan tersebut.
+- Tema **biru terang** memakai referensi `#90CAF9` (MPP) dan `#2196F3` (Actual). Aksen tombol memakai biru lebih gelap untuk menjaga keterbacaan. Logo asli Nasmoco ditampilkan bersama identitas PT New Ratna Motor (Nasmoco Group).
 - Empat KPI menggunakan tinggi yang sama, 136 px, dengan grid 4, 2, atau 1 kolom sesuai lebar area dashboard, termasuk ketika sidebar terbuka.
+- Grafik cabang menempatkan MPP di atas Actual. Sel Gap memakai gradasi merah untuk kekurangan, putih untuk nol, dan hijau untuk kelebihan; besar Gap menentukan kepekatan relatif pada tabel. Bar Pemenuhan penuh pada 100%, dan angka di atas 100% tetap ditampilkan.
 - Judul dan status sinkronisasi diringkas. Interval dan informasi sumber tersedia di **Pembaruan & sumber** pada sidebar; waktu pembacaan lengkap tersedia di **Validasi dan kualitas data**.
 - Pembacaan Google Sheets berkala menggunakan cache yang diperbarui di latar belakang setelah data pertama dimuat. Sinkronisasi manual tetap membaca ulang langsung.
 - Sertakan `dashboard.css` dan `.streamlit/config.toml` ketika memperbarui kode hosting. File CSS hanya mengatur grid KPI; warna diatur oleh tema native Streamlit.
@@ -63,12 +68,16 @@ Pengujian menggunakan data buatan dan mock API. Koneksi Google asli perlu diuji 
 app.py                           # UI, cache, refresh, status sinkronisasi
 dashboard.css                    # grid KPI responsif, tanpa override warna
 data_loader.py                   # adapter Excel, parser bersama, agregasi
+table_styles.py                  # gradasi warna sel Gap pada kedua tabel
+browser_excel.py                 # koneksi read-only file perangkat melalui browser
+excel_sources.py                 # validasi path dan transfer workbook per sesi
+Assets/Logo-Nasmoco.png           # logo perusahaan asli
 google_sheets_loader.py           # adapter Sheets API, service account read-only
 requirements.txt
 JALANKAN_DASHBOARD.bat
 PANDUAN_GOOGLE_SHEETS_DEPLOY.md
 .streamlit/secrets.example.toml   # contoh konfigurasi
-.streamlit/config.toml            # tema terang/gelap dan sidebar
+.streamlit/config.toml            # tema biru terang dan sidebar
 .streamlit/secrets.toml           # lokal saja, tidak masuk Git
 tests/
 Excell/Sales.xls                  # sumber privat, tidak masuk Git

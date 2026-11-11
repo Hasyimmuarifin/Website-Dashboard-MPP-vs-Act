@@ -1,9 +1,12 @@
 """Headless UI checks for live data, caching, stale data and source isolation."""
 import os
+import base64
+from io import BytesIO
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import pandas as pd
 import streamlit as st
@@ -18,6 +21,9 @@ APP = str(Path(__file__).resolve().parents[1] / 'app.py')
 
 class DashboardTests(unittest.TestCase):
     def setUp(self):
+        self.local_mode = patch.dict(os.environ, {'DASHBOARD_ALLOW_LOCAL_PATHS': '1'})
+        self.local_mode.start()
+        self.addCleanup(self.local_mode.stop)
         st.cache_data.clear()
         self.loader_patch = patch('google_sheets_loader.load_google_sales')
         self.loader = self.loader_patch.start()
@@ -104,6 +110,70 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(self.app.selectbox(key='source').value, 'Excel lokal')
                 self.assertEqual(self.app.metric[1].value, '176')
                 self.assertEqual(self.loader.call_count, 0)
+
+    def test_pasted_explorer_path_updates_after_save_and_isolates_new_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'File Sales kolaborasi.xlsx'
+            source_env = patch.dict(os.environ, {'SALES_EXCEL_PATH': str(path)})
+            source_env.start()
+            self.addCleanup(source_env.stop)
+            def save(actual):
+                pd.DataFrame([[None, None] + row for row in sample_rows(actual)]).to_excel(path, sheet_name=SHEET_NAME, header=False, index=False)
+            save(8)
+            self.app.run()
+            self.app.selectbox(key='source').select('Excel lokal').run()
+            self.app.text_input(key='local_path_input').set_value(f'"{path}"')
+            self.app.button(key='connect_path').click().run()
+            self.check_no_crash()
+            self.assertEqual(self.app.metric[1].value, '176')
+            save(9)
+            self.app.run()  # Same path, changed file timestamp and contents.
+            self.check_no_crash()
+            self.assertEqual(self.app.metric[1].value, '198')
+            self.app.text_input(key='local_path_input').set_value(str(Path(folder) / 'missing.xlsx'))
+            self.app.button(key='connect_path').click().run()
+            self.check_no_crash()
+            self.assertFalse(self.app.metric)
+
+    def test_online_browser_files_update_per_session_and_clear_on_disconnect(self):
+        def payload(actual):
+            buffer = BytesIO()
+            pd.DataFrame([[None, None] + row for row in sample_rows(actual)]).to_excel(buffer, sheet_name=SHEET_NAME, header=False, index=False)
+            return {'status': 'connected', 'name': 'sales.xlsx',
+                    'content': base64.b64encode(buffer.getvalue()).decode()}
+        with patch('browser_excel.live_excel_connection') as connect:
+            connect.return_value = SimpleNamespace(file=payload(8))
+            self.app.session_state['excel_mode'] = 'Dari browser (otomatis)'
+            self.app.run()
+            self.app.selectbox(key='source').select('Excel lokal').run()
+            self.check_no_crash()
+            self.assertEqual(self.app.metric[1].value, '176')
+            connect.return_value = SimpleNamespace(file=payload(9))
+            self.app.run()
+            self.check_no_crash()
+            self.assertEqual(self.app.metric[1].value, '198')
+            # Another viewer receives their own workbook, not the first viewer's.
+            second = AppTest.from_file(APP, default_timeout=30)
+            second.secrets['google_sheets'] = {}
+            second.secrets['gcp_service_account'] = {}
+            second.session_state['excel_mode'] = 'Dari browser (otomatis)'
+            connect.return_value = SimpleNamespace(file=payload(7))
+            second.run()
+            self.assertFalse(second.exception)
+            self.assertEqual(second.metric[1].value, '154')
+            connect.return_value = SimpleNamespace(file={'status': 'disconnected'})
+            self.app.run()
+            self.check_no_crash()
+            self.assertFalse(self.app.metric)
+
+    def test_online_path_input_cannot_read_server_files(self):
+        with patch.dict(os.environ, {'DASHBOARD_ALLOW_LOCAL_PATHS': '0'}), patch('browser_excel.live_excel_connection', return_value=SimpleNamespace(file=None)):
+            self.app.session_state['excel_mode'] = 'Tempel path (server lokal)'
+            self.app.run()
+            self.app.selectbox(key='source').select('Excel lokal').run()
+            self.check_no_crash()
+            self.assertTrue(self.app.text_input(key='local_path_input').disabled)
+            self.assertFalse(self.app.metric)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 """Source adapter for Nasmoco Sales manpower. Reads the original workbook, never edits it."""
 from pathlib import Path
+from io import BytesIO
 import pandas as pd
 
 SHEET_NAME = 'template bider (okt)'
@@ -13,7 +14,7 @@ BRANCH_ORDER = [name for names in AREAS.values() for name in names]
 METRICS = ['mpp_total', 'mpp_reguler', 'mpp_mitra', 'actual_total', 'actual_reguler', 'actual_mitra']
 
 
-def load_sales(path: str | Path) -> tuple[pd.DataFrame, list[str]]:
+def load_sales(path: str | Path, worksheet: str = SHEET_NAME) -> tuple[pd.DataFrame, list[str]]:
     """Read C/K/L/M/P/Q/R by position; exclude area subtotal & total rows.
 
     Formula cells in .xls are read from last Excel-saved cached values. Save
@@ -25,8 +26,21 @@ def load_sales(path: str | Path) -> tuple[pd.DataFrame, list[str]]:
     if path.suffix.lower() not in ('.xls', '.xlsx'):
         raise ValueError('Format sumber harus .xls atau .xlsx')
     engine = 'xlrd' if path.suffix.lower() == '.xls' else 'openpyxl'
-    raw = pd.read_excel(path, sheet_name=SHEET_NAME, header=None, engine=engine,
+    raw = pd.read_excel(path, sheet_name=worksheet, header=None, engine=engine,
                         usecols='C:R', dtype=object)
+    return parse_sales(raw)
+
+
+def load_sales_bytes(content: bytes, filename: str, worksheet: str = SHEET_NAME):
+    """Parse a per-user browser file in memory without writing it on the server."""
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ('.xls', '.xlsx'):
+        raise ValueError('Format sumber harus .xls atau .xlsx')
+    if not content or len(content) > 20 * 1024 * 1024:
+        raise ValueError('File Excel harus berisi data dan berukuran maksimal 20 MB.')
+    engine = 'xlrd' if suffix == '.xls' else 'openpyxl'
+    raw = pd.read_excel(BytesIO(content), sheet_name=worksheet, header=None,
+                        engine=engine, usecols='C:R', dtype=object)
     return parse_sales(raw)
 
 

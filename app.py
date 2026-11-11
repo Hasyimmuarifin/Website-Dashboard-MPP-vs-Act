@@ -8,20 +8,32 @@ import time
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from data_loader import load_sales, summarize, SHEET_NAME
+from data_loader import load_sales, load_sales_bytes, summarize, SHEET_NAME
+from excel_sources import normalize_excel_path, decode_browser_file
 from google_sheets_loader import load_google_sales, GoogleSheetsError
+from table_styles import style_gap_cells
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_FILE = BASE_DIR / 'Excell' / 'Sales.xls'
 FILE_PATH = Path(os.environ.get('SALES_EXCEL_PATH', str(DEFAULT_FILE)))
 WIB = timezone(timedelta(hours=7))
+LOGO_PATH = BASE_DIR / 'Assets' / 'Logo-Nasmoco.png'
+# Arbitrary server paths are available only on an explicitly local deployment.
+local_path_setting = os.environ.get('DASHBOARD_ALLOW_LOCAL_PATHS')
+LOCAL_PATHS_ALLOWED = (local_path_setting == '1' if local_path_setting is not None
+                       else st.get_option('server.address') in ('localhost', '127.0.0.1', '::1'))
 
 st.set_page_config(page_title='MPP vs Actual | Nasmoco HCM', page_icon=':material/monitoring:', layout='wide', initial_sidebar_state='auto')
 st.html(BASE_DIR / 'dashboard.css')
 
-@st.cache_data(show_spinner=False, ttl=60, max_entries=8)
-def read_cached(path: str, mtime_ns: int, size: int):
-    return load_sales(path)
+@st.cache_data(show_spinner=False, ttl=60, max_entries=4, scope='session')
+def read_cached(path: str, mtime_ns: int, size: int, worksheet: str = SHEET_NAME):
+    return load_sales(path, worksheet)
+
+
+@st.cache_data(show_spinner=False, ttl=60, max_entries=4, scope='session')
+def read_uploaded_cached(content: bytes, filename: str, worksheet: str):
+    return load_sales_bytes(content, filename, worksheet)
 
 
 @st.cache_data(show_spinner=False, ttl=5, max_entries=8, refresh_mode='background')
@@ -43,10 +55,13 @@ def format_time(value: datetime) -> str:
 
 def chart(agg: pd.DataFrame, category: str, title: str, height: int = 470, horizontal: bool = False):
     fig = go.Figure()
-    colors = [('MPP', '#8291A8'), ('Actual', '#D82743')]
-    for series, color in colors:
+    colors = [('MPP', '#90CAF9'), ('Actual', '#2196F3')]
+    # Plotly places the first horizontal trace below the next one. Reverse
+    # drawing order only for branch bars; keep the legend MPP then Actual.
+    for series, color in (reversed(colors) if horizontal else colors):
         fig.add_trace(go.Bar(
-            name=series, x=agg[series] if horizontal else agg[category],
+            name=series, legendrank=0 if series == 'MPP' else 1,
+            x=agg[series] if horizontal else agg[category],
             y=agg[category] if horizontal else agg[series],
             orientation='h' if horizontal else 'v', marker_color=color,
             text=agg[series].astype(int).astype(str), textposition='outside', cliponaxis=False,
@@ -69,7 +84,10 @@ def chart(agg: pd.DataFrame, category: str, title: str, height: int = 470, horiz
     return fig
 
 with st.sidebar.container(gap='small'):
-    st.subheader('NASMOCO · HCM')
+    if LOGO_PATH.is_file():
+        st.image(str(LOGO_PATH), width=210, alt='Logo Nasmoco Authorized Toyota Dealer, identitas PT New Ratna Motor.')
+    st.caption('PT New Ratna Motor · Nasmoco Group')
+    st.subheader('Human capital')
     st.caption('Manpower & recruitment analytics')
 try:
     secrets = st.secrets.to_dict()
@@ -86,32 +104,76 @@ if not isinstance(sheet_config, dict) or not isinstance(credentials, dict):
 configured_id = str(sheet_config.get('spreadsheet_id', '')).strip()
 worksheet = str(sheet_config.get('worksheet', SHEET_NAME)).strip()
 st.sidebar.caption('FILTER DASHBOARD')
-source = st.sidebar.selectbox('Sumber data', ['Google Sheets', 'Excel lokal'], index=0 if configured_id else 1, key='source')
+source = st.sidebar.selectbox('Sumber data', ['Google Sheets', 'Excel lokal', 'Unggah Excel'], index=0 if configured_id else 1, key='source')
+excel_mode = None
+excel_worksheet = SHEET_NAME
+local_path_text = str(FILE_PATH)
+if source != 'Google Sheets':
+    excel_worksheet = st.sidebar.text_input('Nama sheet Excel', value=SHEET_NAME, key='excel_worksheet').strip()
+if source == 'Excel lokal':
+    excel_mode = st.sidebar.radio('Cara menghubungkan Excel', ['Dari browser (otomatis)', 'Tempel path (server lokal)'],
+                                  index=1 if LOCAL_PATHS_ALLOWED else 0, key='excel_mode')
+    if excel_mode == 'Tempel path (server lokal)':
+        st.session_state.setdefault('local_excel_path', str(FILE_PATH))
+        with st.sidebar.form('local_excel_source'):
+            path_input = st.text_input('Path file Excel', value=st.session_state.local_excel_path,
+                                       key='local_path_input', disabled=not LOCAL_PATHS_ALLOWED,
+                                       help='Di Explorer: Shift + klik kanan file > Salin sebagai jalur. Tanda kutip boleh ikut ditempel.')
+            connect_path = st.form_submit_button('Hubungkan path', disabled=not LOCAL_PATHS_ALLOWED,
+                                                type='primary', width='stretch', key='connect_path')
+        if connect_path:
+            st.session_state.local_excel_path = path_input
+        local_path_text = st.session_state.local_excel_path
+        if LOCAL_PATHS_ALLOWED:
+            st.sidebar.caption('Path dibaca pada komputer server dashboard. Simpan perubahan Excel untuk memperbarui grafik.')
+        else:
+            st.sidebar.info('Website online tidak dapat membaca path laptop. Pilih Dari browser (otomatis), lalu pilih file sekali.')
 segment = st.sidebar.radio('Jenis sales', ['Total', 'Reguler', 'Mitra'], index=0, horizontal=True)
 area_selection = st.sidebar.selectbox('Area', ['Seluruh Area', 'Area 1', 'Area 2', 'Area 3'], key='area_filter')
 with st.sidebar.expander('Pembaruan & sumber', icon=':material/tune:'):
     refresh = st.select_slider('Refresh otomatis', options=[5, 10, 15, 30, 60], value=5, format_func=lambda v: f'{v} detik', key='refresh_interval')
-    st.caption(f'Tab: {worksheet if source == "Google Sheets" else SHEET_NAME}')
+    st.caption(f'Tab: {worksheet if source == "Google Sheets" else excel_worksheet}')
     if source == 'Google Sheets':
         st.caption('Perubahan yang tersimpan dibaca otomatis. Cache API bersama berlaku selama 5 detik.')
+    elif source == 'Excel lokal':
+        st.caption('Simpan perubahan di Excel. Koneksi browser memerlukan Chrome/Edge desktop dan HTTPS atau localhost.')
     else:
-        st.caption(f'File: {FILE_PATH.name}. Perubahan dibaca setelah Excel disimpan di server dashboard.')
-st.sidebar.caption(f':material/sync: Pembaruan otomatis · {refresh} detik')
+        st.caption('Unggahan adalah salinan saat dipilih. Unggah ulang setelah file di laptop berubah.')
+excel_content, excel_name, browser_error = b'', '', None
+browser_payload = None
+if source == 'Excel lokal' and excel_mode == 'Dari browser (otomatis)':
+    from browser_excel import live_excel_connection
+    with st.sidebar:
+        connection = live_excel_connection(interval=refresh, nonce=st.session_state.get('browser_sync_nonce', 0))
+        browser_payload = connection.file
+        st.caption('File yang dipilih diproses di server untuk dashboard sesi Anda. File asli tidak diubah. Pilih kembali setelah halaman dimuat ulang.')
+    try:
+        excel_content, excel_name, browser_error = decode_browser_file(browser_payload)
+    except ValueError as error:
+        browser_error = str(error)
+elif source == 'Unggah Excel':
+    uploaded = st.sidebar.file_uploader('Pilih file Excel', type=['xls', 'xlsx'], max_upload_size=20, key='excel_upload')
+    if uploaded is not None:
+        excel_content, excel_name = uploaded.getvalue(), uploaded.name
+    st.sidebar.caption('Data unggahan hanya digunakan dalam sesi ini. Unggah ulang untuk memperbarui data.')
+st.sidebar.caption(':material/upload_file: Snapshot unggahan' if source == 'Unggah Excel' else f':material/sync: Pembaruan otomatis · {refresh} detik')
 if source == 'Google Sheets' and not configured_id:
     st.sidebar.info('Isi Spreadsheet ID dan kredensial pada Streamlit Secrets. Panduan tersedia di PANDUAN_GOOGLE_SHEETS_DEPLOY.md.')
 with st.container(gap=None):
     st.title('MPP vs MP Actual Sales')
-    st.caption('Nasmoco Group · Kebutuhan dan realisasi tenaga sales')
+    st.caption('PT New Ratna Motor · Nasmoco Group · Kebutuhan dan realisasi tenaga sales')
 
 # A new source or changed credentials must never inherit another source's data.
 source_key = (source, configured_id, worksheet,
-              hashlib.sha256(json.dumps(credentials, sort_keys=True).encode()).hexdigest(), str(FILE_PATH))
+              hashlib.sha256(json.dumps(credentials, sort_keys=True).encode()).hexdigest(),
+              excel_mode, local_path_text, excel_worksheet, excel_name,
+              hashlib.sha256(excel_content).hexdigest())
 if st.session_state.get('data_source_key') != source_key:
     st.session_state.data_source_key = source_key
     st.session_state.data_status = {'snapshot': None, 'failures': 0, 'next_retry': 0.0, 'error': None}
 
 
-@st.fragment(run_every=refresh)
+@st.fragment(run_every=refresh if source != 'Unggah Excel' else None)
 def poll_source():
     state = st.session_state.data_status
     previous_snapshot = state['snapshot']
@@ -122,20 +184,41 @@ def poll_source():
     if sync_now:
         if source == 'Google Sheets':
             read_google_cached.clear(configured_id, worksheet, credentials)
+        elif source == 'Excel lokal' and excel_mode == 'Dari browser (otomatis)':
+            st.session_state.browser_sync_nonce = st.session_state.get('browser_sync_nonce', 0) + 1
+            state.update(failures=0, next_retry=0.0)
+            st.rerun()
+        elif source == 'Unggah Excel':
+            read_uploaded_cached.clear()
         else:
             read_cached.clear()
         state.update(failures=0, next_retry=0.0)
+    awaiting_file = not excel_content and not browser_error and (source == 'Unggah Excel' or (source == 'Excel lokal' and excel_mode == 'Dari browser (otomatis)'))
+    if awaiting_file:
+        status_line.caption(':blue-badge[Menunggu file] Pilih Excel untuk sesi Anda')
+        st.info('Klik Hubungkan Excel dari perangkat untuk pemantauan otomatis, atau gunakan Unggah Excel untuk membaca satu salinan file.')
+        return
     if time.time() >= state['next_retry']:
         try:
             if source == 'Google Sheets':
                 result = read_google_cached(configured_id, worksheet, credentials)
                 if result['error']:
                     raise GoogleSheetsError(result['error'])
-            else:
-                stat = FILE_PATH.stat()
-                df, warnings = read_cached(str(FILE_PATH), stat.st_mtime_ns, stat.st_size)
+            elif source == 'Excel lokal' and excel_mode == 'Tempel path (server lokal)':
+                if not LOCAL_PATHS_ALLOWED:
+                    raise ValueError('Input path hanya tersedia pada server lokal. Pada website online, pilih koneksi Dari browser (otomatis).')
+                path = normalize_excel_path(local_path_text)
+                if not path.is_file():
+                    raise ValueError('File Excel tidak ditemukan. Tempel path lengkap dari Salin sebagai jalur, termasuk nama dan ekstensi file.')
+                stat = path.stat()
+                df, warnings = read_cached(str(path), stat.st_mtime_ns, stat.st_size, excel_worksheet)
                 result = {'df': df, 'warnings': warnings, 'read_at': datetime.now(WIB),
-                          'modified': datetime.fromtimestamp(stat.st_mtime, tz=WIB)}
+                          'modified': datetime.fromtimestamp(stat.st_mtime, tz=WIB), 'filename': path.name}
+            else:
+                if browser_error:
+                    raise ValueError(browser_error)
+                df, warnings = read_uploaded_cached(excel_content, excel_name, excel_worksheet)
+                result = {'df': df, 'warnings': warnings, 'read_at': datetime.now(WIB), 'filename': excel_name}
             state.update(snapshot=result, failures=0, next_retry=0.0, error=None)
         except Exception as error:
             # Never expose raw authentication/HTTP exceptions or secret contents.
@@ -170,7 +253,7 @@ def poll_source():
         status_line.caption(':orange-badge[Data tersimpan] Pembaruan tertunda')
         st.warning(f'Menampilkan data terakhir yang berhasil dibaca pada {format_time(result["read_at"])}. Data mungkin belum terbaru.')
     else:
-        status_line.caption(f':green-badge[Terhubung] · {result["read_at"]:%H:%M:%S} WIB')
+        status_line.caption(f':blue-badge[Terhubung] · {result["read_at"]:%H:%M:%S} WIB')
 
 
 poll_source()
@@ -203,17 +286,25 @@ with st.container(border=True):
 with st.container(border=True):
     st.subheader('Perbandingan per cabang')
     st.plotly_chart(chart(by_branch, 'Cabang', f'MPP dan actual · {area_selection}', height=max(420, 32 * len(by_branch) + 120), horizontal=True), width='stretch', key='branch_chart', alt='Perbandingan kebutuhan MPP dan manpower actual per cabang.', config={'displayModeBar': False})
+table_columns = {
+    'MPP': st.column_config.NumberColumn(format='%d'),
+    'Actual': st.column_config.NumberColumn(format='%d'),
+    'Gap': st.column_config.NumberColumn(format='%+d', help='Actual − MPP. Merah: kekurangan; putih: sesuai MPP; hijau: kelebihan. Semakin besar nilai absolut Gap, semakin pekat warnanya pada tabel ini.'),
+    'Pemenuhan (%)': st.column_config.ProgressColumn(min_value=0, max_value=100, format='%.1f%%', color='#2196F3', help='Bar penuh pada 100%. Nilai di atas 100% tetap ditampilkan sesuai perhitungan.'),
+}
 tab1, tab2 = st.tabs(['Detail Cabang', 'Ringkasan Area'])
 with tab1:
     detailed = by_branch.copy()
     detailed['Pemenuhan (%)'] = detailed.pop('Fulfillment')
-    st.dataframe(detailed, hide_index=True, width='stretch', column_config={'MPP':st.column_config.NumberColumn(format='%d'),'Actual':st.column_config.NumberColumn(format='%d'),'Gap':st.column_config.NumberColumn(format='%+d'),'Pemenuhan (%)':st.column_config.ProgressColumn(min_value=0,max_value=120,format='%.1f%%')})
+    st.dataframe(style_gap_cells(detailed), hide_index=True, width='stretch', column_config=table_columns)
     st.download_button('Unduh detail cabang (CSV)', detailed.to_csv(index=False).encode('utf-8-sig'), file_name='mpp_vs_actual_cabang.csv', mime='text/csv', key='download_branch')
 with tab2:
-    st.dataframe(summary.rename(columns={'Fulfillment':'Pemenuhan (%)'}), hide_index=True, width='stretch')
+    st.dataframe(style_gap_cells(summary.rename(columns={'Fulfillment':'Pemenuhan (%)'})), hide_index=True, width='stretch', column_config=table_columns)
 with st.expander('Validasi dan kualitas data'):
     st.caption(f'Terakhir dibaca: {format_time(result["read_at"])} · Sumber: {source}')
-    if source == 'Excel lokal':
+    if result.get('filename'):
+        st.caption(f'File sesi ini: {result["filename"]} · Sheet: {excel_worksheet}')
+    if 'modified' in result:
         st.caption(f'File disimpan: {format_time(result["modified"])}')
     if warnings:
         for item in warnings:

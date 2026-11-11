@@ -17,5 +17,6 @@ if errorlevel 1 (
   exit /b 1
 )
 echo Membuka dashboard...
+set "DASHBOARD_ALLOW_LOCAL_PATHS=1"
 ".venv\Scripts\python.exe" -m streamlit run app.py --server.address localhost --server.port 8501
 pause

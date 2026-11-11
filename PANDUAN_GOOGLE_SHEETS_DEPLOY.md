@@ -74,11 +74,15 @@ Pilihan yang sesuai untuk proyek ini adalah **Streamlit Community Cloud**: hosti
    app.py
    dashboard.css
    data_loader.py
+   table_styles.py
+   browser_excel.py
+   excel_sources.py
+   Assets/Logo-Nasmoco.png
    google_sheets_loader.py
    requirements.txt
    .gitignore
    .streamlit/
-     config.toml          # tema terang/gelap, disertakan di GitHub
+     config.toml          # tema biru terang, disertakan di GitHub
      secrets.example.toml  # contoh kosong, bukan secrets.toml asli
    ```
 
@@ -124,3 +128,5 @@ Dari folder proyek:
 ```
 
 Pengujian memakai data buatan dan mock API, sehingga tidak memerlukan private key atau akses spreadsheet sungguhan. Pengujian koneksi akhir tetap dilakukan setelah Spreadsheet ID dan Secrets asli tersedia.
+
+Untuk membaca workbook berbeda milik masing-masing pengunjung pada website yang sama, lihat [panduan Excel per pengguna](PANDUAN_EXCEL_PER_PENGGUNA.md). Google Sheets tetap menjadi sumber bersama, sedangkan koneksi browser dan unggahan Excel merupakan sumber per sesi.
