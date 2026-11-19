@@ -15,7 +15,7 @@ def gap_cell_style(value: float, scale: float) -> str:
         # Opaque pre-blending works consistently in Streamlit's canvas table.
         rgb = [round(255 * (1 - alpha) + channel * alpha) for channel in base]
         background = '#' + ''.join(f'{channel:02X}' for channel in rgb)
-    return f'background-color: {background}; color: #173653;'
+    return f'background-color: {background}; color: #000000;'
 
 
 def style_gap_cells(data: pd.DataFrame):

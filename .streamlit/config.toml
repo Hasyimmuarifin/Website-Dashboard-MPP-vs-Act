@@ -1,7 +1,9 @@
-# Light blue corporate theme; use a darker blue for legible button text.
+# Light blue corporate theme with Poppins and black text.
 [theme]
 base = "light"
-font = "sans-serif"
+font = "Poppins:https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+headingFont = "Poppins"
+codeFont = "Poppins"
 baseFontSize = 15
 headingFontSizes = ["1.9rem", "1.5rem", "1.15rem", "1rem", "0.95rem", "0.875rem"]
 headingFontWeights = [700, 650, 600, 600, 600, 600]
@@ -17,14 +19,22 @@ paddingBottom = "2rem"
 primaryColor = "#1976D2"
 backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F0F7FE"
-textColor = "#173653"
+textColor = "#000000"
 borderColor = "#CFE4F7"
-linkColor = "#1565C0"
+linkColor = "#000000"
+codeTextColor = "#000000"
+blueTextColor = "#000000"
+greenTextColor = "#000000"
+redTextColor = "#000000"
+orangeTextColor = "#000000"
+yellowTextColor = "#000000"
+violetTextColor = "#000000"
+grayTextColor = "#000000"
 blueColor = "#2196F3"
 greenColor = "#16815D"
 redColor = "#C62828"
 dataframeHeaderBackgroundColor = "#E3F2FD"
-dataframeHeaderTextColor = "#174C7D"
+dataframeHeaderTextColor = "#000000"
 chartCategoricalColors = ["#90CAF9", "#2196F3"]
 
 [theme.sidebar]
@@ -33,5 +43,5 @@ paddingBottom = "1.5rem"
 headingFontSizes = ["1.4rem", "1.2rem", "1.1rem", "1rem", "0.95rem", "0.875rem"]
 backgroundColor = "#EFF7FE"
 secondaryBackgroundColor = "#FFFFFF"
-textColor = "#173653"
+textColor = "#000000"
 borderColor = "#C5DFF5"

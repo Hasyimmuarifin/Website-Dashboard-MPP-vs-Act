@@ -1,12 +1,9 @@
 """Headless UI checks for live data, caching, stale data and source isolation."""
-import os
-import base64
+import json
 from io import BytesIO
 from pathlib import Path
-import tempfile
 import unittest
 from unittest.mock import patch
-from types import SimpleNamespace
 
 import pandas as pd
 import streamlit as st
@@ -21,9 +18,6 @@ APP = str(Path(__file__).resolve().parents[1] / 'app.py')
 
 class DashboardTests(unittest.TestCase):
     def setUp(self):
-        self.local_mode = patch.dict(os.environ, {'DASHBOARD_ALLOW_LOCAL_PATHS': '1'})
-        self.local_mode.start()
-        self.addCleanup(self.local_mode.stop)
         st.cache_data.clear()
         self.loader_patch = patch('google_sheets_loader.load_google_sales')
         self.loader = self.loader_patch.start()
@@ -32,6 +26,7 @@ class DashboardTests(unittest.TestCase):
         self.app = AppTest.from_file(APP, default_timeout=30)
         self.app.secrets['google_sheets'] = {'spreadsheet_id': 'test-sheet', 'worksheet': SHEET_NAME}
         self.app.secrets['gcp_service_account'] = {'client_email': 'test@example.test'}
+        self.app.session_state['source'] = 'Google Sheets'
 
     def check_no_crash(self):
         self.assertFalse(self.app.exception, [item.message for item in self.app.exception])
@@ -89,91 +84,97 @@ class DashboardTests(unittest.TestCase):
 
     def test_source_change_discards_previous_snapshot(self):
         self.app.run()
-        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'SALES_EXCEL_PATH': str(Path(folder) / 'missing.xls')}):
-            self.app.selectbox(key='source').select('Excel lokal').run()
+        self.app.selectbox(key='source').select('Unggah Excel').run()
         self.check_no_crash()
         self.assertFalse(self.app.metric)
         self.assertIsNone(self.app.session_state.data_status['snapshot'])
+        self.assertEqual(len(self.app.get('file_uploader')), 1)
 
-    def test_local_workbook_still_renders(self):
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'sales.xlsx'
-            pd.DataFrame([[None, None] + row for row in sample_rows()]).to_excel(path, sheet_name=SHEET_NAME, header=False, index=False)
-            with patch.dict(os.environ, {'SALES_EXCEL_PATH': str(path)}):
-                self.app.secrets.clear()
-                # Override local Secrets explicitly; clear() alone falls back
-                # to a developer's real secrets.toml if one exists.
-                self.app.secrets['google_sheets'] = {}
-                self.app.secrets['gcp_service_account'] = {}
-                self.app.run()
-                self.check_no_crash()
-                self.assertEqual(self.app.selectbox(key='source').value, 'Excel lokal')
-                self.assertEqual(self.app.metric[1].value, '176')
-                self.assertEqual(self.loader.call_count, 0)
+    def test_upload_is_default_and_local_source_is_removed(self):
+        del self.app.session_state['source']
+        self.app.run()
+        self.check_no_crash()
+        self.assertEqual(self.app.selectbox(key='source').options, ['Unggah Excel', 'Google Sheets'])
+        self.assertEqual(self.app.selectbox(key='source').value, 'Unggah Excel')
+        self.assertEqual(self.loader.call_count, 0)
+        self.assertFalse(self.app.metric)
+        self.assertFalse(self.app.select_slider)
+        self.assertEqual(len(self.app.get('file_uploader')), 1)
+        self.assertEqual([item.label for item in self.app.text_input], ['Nama sheet Excel'])
 
-    def test_pasted_explorer_path_updates_after_save_and_isolates_new_file(self):
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'File Sales kolaborasi.xlsx'
-            source_env = patch.dict(os.environ, {'SALES_EXCEL_PATH': str(path)})
-            source_env.start()
-            self.addCleanup(source_env.stop)
-            def save(actual):
-                pd.DataFrame([[None, None] + row for row in sample_rows(actual)]).to_excel(path, sheet_name=SHEET_NAME, header=False, index=False)
-            save(8)
+    def test_previous_local_source_falls_back_to_upload(self):
+        self.app.session_state['source'] = 'Excel lokal'
+        self.app.run()
+        self.check_no_crash()
+        self.assertEqual(self.app.selectbox(key='source').value, 'Unggah Excel')
+        self.assertFalse(self.app.metric)
+
+    @staticmethod
+    def workbook(actual):
+        buffer = BytesIO()
+        pd.DataFrame([[None, None] + row for row in sample_rows(actual)]).to_excel(
+            buffer, sheet_name=SHEET_NAME, header=False, index=False)
+        buffer.name = 'sales.xlsx'
+        return buffer
+
+    def test_uploaded_workbooks_update_and_clear_without_leaking_between_sessions(self):
+        self.app.session_state['source'] = 'Unggah Excel'
+        with patch.object(type(st.sidebar), 'file_uploader') as upload:
+            upload.return_value = self.workbook(8)
             self.app.run()
-            self.app.selectbox(key='source').select('Excel lokal').run()
-            self.app.text_input(key='local_path_input').set_value(f'"{path}"')
-            self.app.button(key='connect_path').click().run()
             self.check_no_crash()
             self.assertEqual(self.app.metric[1].value, '176')
-            save(9)
-            self.app.run()  # Same path, changed file timestamp and contents.
-            self.check_no_crash()
-            self.assertEqual(self.app.metric[1].value, '198')
-            self.app.text_input(key='local_path_input').set_value(str(Path(folder) / 'missing.xlsx'))
-            self.app.button(key='connect_path').click().run()
-            self.check_no_crash()
-            self.assertFalse(self.app.metric)
-
-    def test_online_browser_files_update_per_session_and_clear_on_disconnect(self):
-        def payload(actual):
-            buffer = BytesIO()
-            pd.DataFrame([[None, None] + row for row in sample_rows(actual)]).to_excel(buffer, sheet_name=SHEET_NAME, header=False, index=False)
-            return {'status': 'connected', 'name': 'sales.xlsx',
-                    'content': base64.b64encode(buffer.getvalue()).decode()}
-        with patch('browser_excel.live_excel_connection') as connect:
-            connect.return_value = SimpleNamespace(file=payload(8))
-            self.app.session_state['excel_mode'] = 'Dari browser (otomatis)'
-            self.app.run()
-            self.app.selectbox(key='source').select('Excel lokal').run()
-            self.check_no_crash()
-            self.assertEqual(self.app.metric[1].value, '176')
-            connect.return_value = SimpleNamespace(file=payload(9))
+            upload.return_value = self.workbook(9)
             self.app.run()
             self.check_no_crash()
             self.assertEqual(self.app.metric[1].value, '198')
-            # Another viewer receives their own workbook, not the first viewer's.
             second = AppTest.from_file(APP, default_timeout=30)
             second.secrets['google_sheets'] = {}
             second.secrets['gcp_service_account'] = {}
-            second.session_state['excel_mode'] = 'Dari browser (otomatis)'
-            connect.return_value = SimpleNamespace(file=payload(7))
+            upload.return_value = self.workbook(7)
             second.run()
             self.assertFalse(second.exception)
             self.assertEqual(second.metric[1].value, '154')
-            connect.return_value = SimpleNamespace(file={'status': 'disconnected'})
+            self.assertEqual(self.app.metric[1].value, '198')
+            upload.return_value = None
             self.app.run()
             self.check_no_crash()
             self.assertFalse(self.app.metric)
+            self.assertIsNone(self.app.session_state.data_status['snapshot'])
 
-    def test_online_path_input_cannot_read_server_files(self):
-        with patch.dict(os.environ, {'DASHBOARD_ALLOW_LOCAL_PATHS': '0'}), patch('browser_excel.live_excel_connection', return_value=SimpleNamespace(file=None)):
-            self.app.session_state['excel_mode'] = 'Tempel path (server lokal)'
+    def test_invalid_upload_replaces_old_data_with_actionable_error(self):
+        self.app.session_state['source'] = 'Unggah Excel'
+        with patch.object(type(st.sidebar), 'file_uploader') as upload:
+            upload.return_value = self.workbook(8)
             self.app.run()
-            self.app.selectbox(key='source').select('Excel lokal').run()
+            self.app.text_input(key='excel_worksheet').set_value('missing sheet').run()
             self.check_no_crash()
-            self.assertTrue(self.app.text_input(key='local_path_input').disabled)
             self.assertFalse(self.app.metric)
+            self.assertTrue(self.app.warning)
+            self.assertTrue(any('unggah ulang atau klik Sinkronkan' in item.value for item in self.app.caption))
+
+    def test_area_gaps_follow_actual_values_and_filters(self):
+        for actual in (8, 10, 12):
+            self.loader.return_value = parse_sales(pd.DataFrame(sample_rows(actual=actual)))
+            st.cache_data.clear()
+            self.app.run()
+            self.check_no_crash()
+            charts = self.app.get('plotly_chart')
+            area = json.loads(charts[0].proto.spec)
+            summary = self.app.dataframe[1].value
+            annotations = area['layout']['annotations']
+            self.assertEqual([a['x'] for a in annotations], summary['Area'].tolist())
+            self.assertEqual([a['text'] for a in annotations], [f'<b>Gap {v:+,.0f}</b>' for v in summary['Gap']])
+            self.assertTrue(all(a['font']['color'] == '#C62828' for a in annotations))
+            self.assertNotIn('annotations', json.loads(charts[1].proto.spec)['layout'])
+        self.app.selectbox(key='area_filter').select('Area 2').run()
+        self.app.radio[0].set_value('Mitra').run()
+        self.check_no_crash()
+        area = json.loads(self.app.get('plotly_chart')[0].proto.spec)
+        self.assertEqual(len(area['layout']['annotations']), 1)
+        annotation = area['layout']['annotations'][0]
+        self.assertEqual(annotation['x'], 'Area 2')
+        self.assertEqual(annotation['text'], f"<b>Gap {self.app.dataframe[1].value['Gap'].iloc[0]:+,.0f}</b>")
 
 
 if __name__ == '__main__':

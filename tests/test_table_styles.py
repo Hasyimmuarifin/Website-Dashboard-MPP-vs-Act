@@ -22,7 +22,7 @@ class GapColorTests(unittest.TestCase):
                 self.assertGreater(dark[1], dark[0])
 
     def test_styling_preserves_numbers_percentages_and_csv(self):
-        data = pd.DataFrame({'Gap': [-10, 0, 10], 'Pemenuhan (%)': [50.0, 100.0, 150.0]})
+        data = pd.DataFrame({'Gap': [-10, 0, 10], 'Fullfillment (%)': [50.0, 100.0, 150.0]})
         before = data.copy(deep=True)
         styled = style_gap_cells(data)
         styled.to_html()  # Exercise real Styler computation/serialization.

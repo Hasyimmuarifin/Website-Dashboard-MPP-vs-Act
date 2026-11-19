@@ -1,3 +1,3 @@
-Letakkan file Sales.xls di direktori ini.
-Nama file wajib Sales.xls (kecuali mengatur variabel SALES_EXCEL_PATH).
-File tidak disertakan di ZIP karena berisi data internal perusahaan.
+Workbook di folder ini dapat dipilih melalui Sumber data > Unggah Excel.
+File boleh bernama apa saja dengan ekstensi .xls atau .xlsx.
+Folder ini tidak dipantau otomatis; simpan dan unggah ulang setelah file berubah.

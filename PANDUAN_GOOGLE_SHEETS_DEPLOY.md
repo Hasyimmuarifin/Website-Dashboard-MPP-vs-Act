@@ -1,6 +1,6 @@
 # Google Sheets dan deploy gratis
 
-Dashboard tetap menggunakan Python + Streamlit + Plotly. Excel lokal masih tersedia sebagai alternatif. Setelah konfigurasi Google Sheets diisi, sumber awal dashboard otomatis menjadi **Google Sheets**.
+Dashboard tetap menggunakan Python + Streamlit + Plotly. Sumber awal dashboard adalah **Unggah Excel**. Setelah konfigurasi Google Sheets diisi, pilih **Google Sheets** pada menu Sumber data untuk pembaruan otomatis.
 
 ## 1. Siapkan spreadsheet kolaborasi
 
@@ -75,8 +75,6 @@ Pilihan yang sesuai untuk proyek ini adalah **Streamlit Community Cloud**: hosti
    dashboard.css
    data_loader.py
    table_styles.py
-   browser_excel.py
-   excel_sources.py
    Assets/Logo-Nasmoco.png
    google_sheets_loader.py
    requirements.txt

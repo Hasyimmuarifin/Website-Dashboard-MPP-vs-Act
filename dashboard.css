@@ -1,5 +1,20 @@
-/* Only the KPI layout needs CSS: native columns otherwise squeeze four cards
-   beside an open sidebar at tablet widths. All colors come from the theme. */
+/* The theme supplies Poppins and black text. Streamlit fades secondary text
+   and colors active controls separately; keep those labels black as requested.
+   SVG chart text is excluded so area-gap annotations stay red. */
+.stApp :is(p, small, label, button, input, textarea),
+.stApp [data-testid="stCaptionContainer"],
+.stApp [data-testid="stFileUploaderFileName"],
+.stApp [data-baseweb="tab"],
+.stApp [data-baseweb="select"],
+[data-baseweb="popover"] [role="option"] {
+    color: #000000 !important;
+}
+
+.stApp [data-testid="stCaptionContainer"] {
+    opacity: 1;
+}
+
+/* Native columns otherwise squeeze four cards beside an open sidebar. */
 .st-key-kpi_grid {
     container-type: inline-size;
     container-name: kpis;
